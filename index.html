@@ -3,35 +3,101 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>Client Portal Temporarily Unavailable</title>
-  <script>
-    try {
-      localStorage.removeItem('cp_accounts_backup_v1');
-      localStorage.removeItem('cp_session_v1');
-      sessionStorage.removeItem('cp_accounts_backup_v1');
-      sessionStorage.removeItem('cp_session_v1');
-    } catch (_) {}
-  </script>
-  <style>
-    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #172033; background: #f3f7fa; }
-    main { width: min(620px, 100%); padding: 36px; border: 1px solid #dbe4ea; border-radius: 18px; background: #fff; box-shadow: 0 18px 50px rgba(22, 46, 72, .10); }
-    .logo { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 24px; border-radius: 16px; color: #fff; background: #16a9cc; font-weight: 800; letter-spacing: .04em; }
-    h1 { margin: 0 0 12px; font-size: clamp(26px, 5vw, 36px); line-height: 1.15; }
-    p { margin: 0; color: #536276; font-size: 17px; line-height: 1.65; }
-    .note { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e6edf2; font-size: 14px; }
-  </style>
+  <title>Anytime Work Client Portal</title>
+  <link rel="stylesheet" href="styles.css?v=20260927-1">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script defer src="app.js?v=20260927-1"></script>
 </head>
 <body>
+  <header class="topbar">
+    <a class="brand" href="/clients/" aria-label="Anytime Work client portal">
+      <span class="logo" aria-hidden="true">ANY</span>
+      <span><strong>Anytime Work</strong><small>Client Portal</small></span>
+    </a>
+    <button id="logoutButton" class="button secondary hidden" type="button">Sign out</button>
+  </header>
   <main>
-    <div class="logo" aria-hidden="true">ANY</div>
-    <h1>Client portal temporarily unavailable</h1>
-    <p>We are completing an urgent security update. Please do not attempt to sign in until you receive confirmation that access has been restored.</p>
-    <p class="note">If you need immediate assistance, contact your Anytime Work account manager through your usual channel.</p>
+    <section id="loadingView" class="auth-wrap" aria-live="polite">
+      <div class="card auth-card center"><div class="spinner" aria-hidden="true"></div><h1>Securing your session</h1><p>Please wait a moment.</p></div>
+    </section>
+    <section id="loginView" class="auth-wrap hidden">
+      <form id="loginForm" class="card auth-card">
+        <span class="eyebrow">Secure sign in</span><h1>Welcome back</h1>
+        <p>Use the email address linked to your Anytime Work client account.</p>
+        <label>Email address<input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+        <p id="loginMessage" class="message hidden" role="alert"></p>
+        <button class="button primary full" type="submit">Sign in</button>
+        <button id="showForgotButton" class="link-button" type="button">Forgot your password?</button>
+      </form>
+    </section>
+    <section id="forgotView" class="auth-wrap hidden">
+      <form id="forgotForm" class="card auth-card">
+        <span class="eyebrow">Password recovery</span><h1>Reset your password</h1>
+        <p>We will send a one-time reset link to your registered email.</p>
+        <label>Email address<input id="forgotEmail" type="email" autocomplete="email" required></label>
+        <p id="forgotMessage" class="message hidden" role="alert"></p>
+        <button class="button primary full" type="submit">Send reset link</button>
+        <button id="backToLoginButton" class="link-button" type="button">Back to sign in</button>
+      </form>
+    </section>
+    <section id="passwordView" class="auth-wrap hidden">
+      <form id="passwordForm" class="card auth-card">
+        <span class="eyebrow">Protected account</span><h1>Choose a new password</h1>
+        <p>Use at least 12 characters and do not reuse a password from another service.</p>
+        <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+        <label>Confirm password<input id="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+        <p id="passwordMessage" class="message hidden" role="alert"></p>
+        <button class="button primary full" type="submit">Save new password</button>
+      </form>
+    </section>
+    <section id="pendingView" class="auth-wrap hidden">
+      <div class="card auth-card"><span class="eyebrow">Account review</span><h1>Access is not linked yet</h1>
+        <p>Your sign-in is valid, but it is not linked to a client company. Contact your Anytime Work account manager.</p>
+        <button id="pendingLogoutButton" class="button secondary full" type="button">Sign out</button>
+      </div>
+    </section>
+    <section id="dashboardView" class="dashboard hidden">
+      <div class="welcome-row"><div><span class="eyebrow">Authenticated client account</span><h1 id="companyName">Client dashboard</h1><p id="companyMeta"></p></div>
+        <label id="accountPickerWrap" class="account-picker hidden">Company<select id="accountPicker"></select></label>
+      </div>
+      <div class="stats" aria-label="Shift summary">
+        <article class="stat"><span>Upcoming</span><strong id="upcomingCount">0</strong></article>
+        <article class="stat"><span>In progress</span><strong id="ongoingCount">0</strong></article>
+        <article class="stat"><span>Completed</span><strong id="completedCount">0</strong></article>
+        <article class="stat"><span>Open slots</span><strong id="openCount">0</strong></article>
+      </div>
+      <div class="card shifts-card">
+        <div class="section-head"><div><h2>Shift history</h2><p>Only shifts for this company’s assigned outlets are returned.</p></div><input id="shiftSearch" class="search" type="search" placeholder="Search worker, outlet or role"></div>
+        <p id="dashboardMessage" class="message hidden" role="alert"></p>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Outlet</th><th>Worker</th><th>Role</th><th>Scheduled</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead><tbody id="shiftRows"></tbody></table></div>
+        <p id="emptyShifts" class="empty hidden">No matching shifts were found.</p>
+      </div>
+    </section>
+    <section id="adminView" class="dashboard hidden">
+      <div class="welcome-row"><div><span class="eyebrow">Protected owner access</span><h1>Client portal administration</h1>
+        <p>Review each login address before enabling access. Legacy addresses are never used automatically.</p></div>
+        <span id="adminRoleBadge" class="admin-badge">Administrator</span>
+      </div>
+      <div class="stats" aria-label="Client access summary">
+        <article class="stat"><span>Total clients</span><strong id="adminTotalCount">0</strong></article>
+        <article class="stat"><span>Enabled</span><strong id="adminEnabledCount">0</strong></article>
+        <article class="stat"><span>Needs review</span><strong id="adminReviewCount">0</strong></article>
+        <article class="stat"><span>Auth linked</span><strong id="adminLinkedCount">0</strong></article>
+      </div>
+      <div class="card shifts-card">
+        <div class="section-head"><div><h2>Client login access</h2><p>A client remains locked out until you confirm a real inbox and enable access.</p></div>
+          <input id="adminSearch" class="search" type="search" placeholder="Search client or email">
+        </div>
+        <div class="security-note"><strong>Dummy email?</strong> Leave access disabled, replace it with an inbox controlled by the client, then enable it. Enabling access does not send an invitation automatically.</div>
+        <p id="adminMessage" class="message hidden" role="alert"></p>
+        <div class="table-wrap"><table class="admin-table"><thead><tr><th>Client</th><th>Legacy contact</th><th>Verified login email</th><th>Access</th><th>Auth</th><th>Action</th></tr></thead><tbody id="adminAccountRows"></tbody></table></div>
+        <p id="emptyAdminAccounts" class="empty hidden">No matching clients were found.</p>
+      </div>
+    </section>
   </main>
+  <footer>Anytime Work · Secure client access</footer>
 </body>
 </html>
