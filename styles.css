@@ -56,6 +56,12 @@ tr:last-child td { border-bottom:0; }
 .status.cancelled { background:#fcebea; color:var(--red); }
 .admin-badge { display:inline-flex; padding:8px 12px; border-radius:999px; background:#e5f5fa; color:var(--blue-dark); font-size:12px; font-weight:800; }
 .security-note { margin:0 0 18px; padding:13px 15px; border:1px solid #f0d6a7; border-radius:11px; background:#fff8e9; color:#755016; font-size:13px; line-height:1.5; }
+.add-client-panel { margin:0 0 20px; padding:15px; border:1px solid var(--line); border-radius:12px; background:#f8fbfd; }
+.add-client-panel summary { cursor:pointer; color:var(--blue-dark); font-weight:800; }
+.add-client-form { display:grid; grid-template-columns:1.1fr 1.2fr 1.4fr auto; align-items:end; gap:12px; margin-top:12px; }
+.add-client-form label { margin:0; }
+.add-client-form .button { margin-bottom:1px; white-space:nowrap; }
+.form-help { margin:10px 0 0; font-size:12px; }
 .admin-table { min-width:1120px; }
 .admin-table td { vertical-align:middle; }
 .admin-table input[type="email"] { min-width:260px; margin:0; }
@@ -71,4 +77,6 @@ tr:last-child td { border-bottom:0; }
 .empty { padding:30px 0 12px; text-align:center; }
 footer { height:50px; display:grid; place-items:center; color:#7b8999; font-size:12px; }
 @media (max-width:820px) { .stats{grid-template-columns:repeat(2,1fr)} .welcome-row,.section-head{align-items:stretch;flex-direction:column} .account-picker,.search{width:100%} }
+@media (max-width:1100px) { .add-client-form{grid-template-columns:1fr 1fr} }
+@media (max-width:620px) { .add-client-form{grid-template-columns:1fr} }
 @media (max-width:480px) { .auth-card{padding:26px 21px} .stats{grid-template-columns:1fr 1fr;gap:10px} .stat{padding:16px} }

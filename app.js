@@ -1,7 +1,7 @@
 'use strict';
 
-const SUPABASE_URL = 'https://jpfnrsxnnbtcadsnjrpc.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpwZm5yc3hubmJ0Y2Fkc25qcnBjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwODk0NTIsImV4cCI6MjA5NDY2NTQ1Mn0.Kord4oX6j6cO9LjomvympIFoPhRLEG04pSW8kASe7DY';
+const SUPABASE_URL = 'https://zzqzbqymhlfcexlxtwlr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6cXpicXltaGxmY2V4bHh0d2xyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0NzQ3NzMsImV4cCI6MjEwNjA1MDc3M30.PCcf0-kphiPpy5AHUhifvkrkahW_hzwr05r7r8AnnEM';
 const RESET_URL = 'https://www.anytimeanywork.com/clients/?mode=reset';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -220,6 +220,42 @@ async function loadAdminDashboard(adminRecord) {
   renderAdminAccounts();
 }
 
+async function refreshAdminAccounts() {
+  const { data, error } = await sb.from('client_portal_accounts')
+    .select('legacy_client_id,display_name,legacy_contact_email,login_email,email_status,access_enabled,auth_user_id,outlets')
+    .order('display_name');
+  if (error) throw error;
+  state.accounts = data || [];
+  renderAdminSummary();
+  renderAdminAccounts();
+}
+
+async function createAdminAccount(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const displayName = $('newClientName').value.trim();
+  const legacyContactEmail = $('newClientContactEmail').value.trim();
+  const outlets = $('newClientOutlets').value.split(',').map((value) => value.trim()).filter(Boolean);
+
+  message('adminMessage', 'Creating the locked client record…', true);
+  busy(form, true);
+  const { error } = await sb.rpc('admin_create_client_portal_account', {
+    p_display_name: displayName,
+    p_legacy_contact_email: legacyContactEmail || null,
+    p_outlets: outlets
+  });
+  busy(form, false);
+  if (error) return message('adminMessage', error.message || 'The client record could not be created.');
+
+  form.reset();
+  try {
+    await refreshAdminAccounts();
+    message('adminMessage', `${displayName} was added with access disabled. Confirm a real login inbox before enabling access.`, true);
+  } catch (refreshError) {
+    message('adminMessage', 'The client was created, but the list could not be refreshed. Reload the page.');
+  }
+}
+
 async function selectAccount(legacyClientId) {
   state.account = state.accounts.find((account) => account.legacy_client_id === legacyClientId) || state.accounts[0];
   if (!state.account) return;
@@ -322,6 +358,7 @@ $('showForgotButton').addEventListener('click', () => { $('forgotEmail').value =
 $('backToLoginButton').addEventListener('click', () => showView('loginView'));
 $('shiftSearch').addEventListener('input', renderShifts);
 $('adminSearch').addEventListener('input', renderAdminAccounts);
+$('newClientForm').addEventListener('submit', createAdminAccount);
 $('accountPicker').addEventListener('change', (event) => selectAccount(event.target.value));
 
 async function logout() {

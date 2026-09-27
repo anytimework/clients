@@ -6,9 +6,9 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <title>Anytime Work Client Portal</title>
-  <link rel="stylesheet" href="styles.css?v=20260927-1">
+  <link rel="stylesheet" href="styles.css?v=20260927-2">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script defer src="app.js?v=20260927-1"></script>
+  <script defer src="app.js?v=20260927-2"></script>
 </head>
 <body>
   <header class="topbar">
@@ -88,6 +88,16 @@
         <article class="stat"><span>Auth linked</span><strong id="adminLinkedCount">0</strong></article>
       </div>
       <div class="card shifts-card">
+        <details class="add-client-panel">
+          <summary>Add a client record</summary>
+          <form id="newClientForm" class="add-client-form">
+            <label>Company name<input id="newClientName" type="text" autocomplete="organization" required></label>
+            <label>Existing contact email (optional)<input id="newClientContactEmail" type="email" autocomplete="off" placeholder="For reference only"></label>
+            <label>Outlets (comma-separated)<input id="newClientOutlets" type="text" autocomplete="off" placeholder="Outlet A, Outlet B"></label>
+            <button class="button primary" type="submit">Create locked client</button>
+          </form>
+          <p class="form-help">New records are always created with portal access disabled. The contact email is not used for sign-in.</p>
+        </details>
         <div class="section-head"><div><h2>Client login access</h2><p>A client remains locked out until you confirm a real inbox and enable access.</p></div>
           <input id="adminSearch" class="search" type="search" placeholder="Search client or email">
         </div>
