@@ -43,7 +43,6 @@ type SourceShift = {
   ot_approved: boolean | null;
   ot_end: string | null;
   arrived_on_time: boolean | null;
-  is_paid: boolean | null;
 };
 
 function response(request: Request, status: number, body: Record<string, unknown>): Response {
@@ -201,8 +200,34 @@ Deno.serve(async (request: Request) => {
     const sourceColumns = [
       "id", "shift_date", "worker_name", "outlet", "role", "scheduled_start",
       "scheduled_end", "rate", "clock_in", "clock_out", "cancelled", "updated_at",
-      "break_mins", "country", "ot_approved", "ot_end", "arrived_on_time", "is_paid",
+      "break_mins", "country", "ot_approved", "ot_end", "arrived_on_time",
     ].join(",");
+
+    // Client invoicing is separate from worker payroll. The shifts.is_paid
+    // column means the worker was paid, so it must never drive the client
+    // portal's Paid/Due badge. ShiftOps records per-shift client billing in
+    // app_settings.billing_invoiced_shifts, keyed by the shift UUID.
+    const { data: billedLedgerRow, error: billedLedgerError } = await source
+      .from("app_settings")
+      .select("value")
+      .eq("key", "billing_invoiced_shifts")
+      .maybeSingle();
+    if (billedLedgerError) {
+      throw new Error(`Daily Ops billing-ledger read failed: ${billedLedgerError.message}`);
+    }
+    const rawBilledLedger = billedLedgerRow?.value;
+    if (!rawBilledLedger || typeof rawBilledLedger !== "object" || Array.isArray(rawBilledLedger)) {
+      throw new Error("Daily Ops billing ledger is unavailable; existing mirror was kept");
+    }
+    const billedShiftIds = new Set(
+      Object.entries(rawBilledLedger as Record<string, unknown>)
+        .filter(([, mark]) => {
+          if (mark === true) return true;
+          if (!mark || typeof mark !== "object" || Array.isArray(mark)) return false;
+          return (mark as Record<string, unknown>).deleted !== true;
+        })
+        .map(([shiftId]) => shiftId),
+    );
 
     const sourceShifts: SourceShift[] = [];
     const pageSize = 1000;
@@ -247,7 +272,7 @@ Deno.serve(async (request: Request) => {
           ot_approved: shift.ot_approved,
           ot_end: shift.ot_end,
           arrived_on_time: shift.arrived_on_time,
-          is_paid: shift.is_paid === true,
+          client_billed: billedShiftIds.has(shift.id),
           source_updated_at: shift.updated_at,
           synced_at: now,
           sync_run_id: runId,
