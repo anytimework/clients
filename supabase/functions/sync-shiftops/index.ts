@@ -43,6 +43,7 @@ type SourceShift = {
   ot_approved: boolean | null;
   ot_end: string | null;
   arrived_on_time: boolean | null;
+  is_paid: boolean | null;
 };
 
 function response(request: Request, status: number, body: Record<string, unknown>): Response {
@@ -200,7 +201,7 @@ Deno.serve(async (request: Request) => {
     const sourceColumns = [
       "id", "shift_date", "worker_name", "outlet", "role", "scheduled_start",
       "scheduled_end", "rate", "clock_in", "clock_out", "cancelled", "updated_at",
-      "break_mins", "country", "ot_approved", "ot_end", "arrived_on_time",
+      "break_mins", "country", "ot_approved", "ot_end", "arrived_on_time", "is_paid",
     ].join(",");
 
     const sourceShifts: SourceShift[] = [];
@@ -246,6 +247,7 @@ Deno.serve(async (request: Request) => {
           ot_approved: shift.ot_approved,
           ot_end: shift.ot_end,
           arrived_on_time: shift.arrived_on_time,
+          is_paid: shift.is_paid === true,
           source_updated_at: shift.updated_at,
           synced_at: now,
           sync_run_id: runId,
