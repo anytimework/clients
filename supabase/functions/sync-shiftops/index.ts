@@ -43,6 +43,8 @@ type SourceShift = {
   ot_approved: boolean | null;
   ot_end: string | null;
   arrived_on_time: boolean | null;
+  stripe_charge_id: string | null;
+  stripe_charged_at: string | null;
 };
 
 function response(request: Request, status: number, body: Record<string, unknown>): Response {
@@ -201,12 +203,15 @@ Deno.serve(async (request: Request) => {
       "id", "shift_date", "worker_name", "outlet", "role", "scheduled_start",
       "scheduled_end", "rate", "clock_in", "clock_out", "cancelled", "updated_at",
       "break_mins", "country", "ot_approved", "ot_end", "arrived_on_time",
+      "stripe_charge_id", "stripe_charged_at",
     ].join(",");
 
     // Client invoicing is separate from worker payroll. The shifts.is_paid
     // column means the worker was paid, so it must never drive the client
     // portal's Paid/Due badge. ShiftOps records per-shift client billing in
-    // app_settings.billing_invoiced_shifts, keyed by the shift UUID.
+    // app_settings.billing_invoiced_shifts, keyed by the shift UUID. Card
+    // payments use the separate per-shift stripe_charge_id marker. Either
+    // source means the client has paid/billed that exact shift.
     const { data: billedLedgerRow, error: billedLedgerError } = await source
       .from("app_settings")
       .select("value")
@@ -272,7 +277,7 @@ Deno.serve(async (request: Request) => {
           ot_approved: shift.ot_approved,
           ot_end: shift.ot_end,
           arrived_on_time: shift.arrived_on_time,
-          client_billed: billedShiftIds.has(shift.id),
+          client_billed: billedShiftIds.has(shift.id) || Boolean(shift.stripe_charge_id),
           source_updated_at: shift.updated_at,
           synced_at: now,
           sync_run_id: runId,
