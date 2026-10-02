@@ -47,6 +47,18 @@ type SourceShift = {
   stripe_charged_at: string | null;
 };
 
+type SourceOutlet = {
+  name: string;
+  country: string | null;
+  location: string | null;
+};
+
+type SourcePortalUser = {
+  id: number;
+  type: string | null;
+  business_name: string | null;
+};
+
 function response(request: Request, status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeadersFor(request) });
 }
@@ -80,6 +92,7 @@ Deno.serve(async (request: Request) => {
   const runId = crypto.randomUUID();
   let destinationAdmin: ReturnType<typeof createClient> | null = null;
   let requestedClientId: string | null = null;
+  let catalogOnly = false;
   let requesterId: string | null = null;
 
   try {
@@ -107,7 +120,7 @@ Deno.serve(async (request: Request) => {
     }
     requesterId = userData.user.id;
 
-    let payload: { client_id?: unknown } = {};
+    let payload: { client_id?: unknown; catalog_only?: unknown } = {};
     try {
       payload = await request.json();
     } catch {
@@ -116,6 +129,7 @@ Deno.serve(async (request: Request) => {
     requestedClientId = typeof payload.client_id === "string" && payload.client_id.trim()
       ? payload.client_id.trim()
       : null;
+    catalogOnly = payload.catalog_only === true;
 
     const { data: isAdmin, error: adminCheckError } = await destinationUser.rpc(
       "is_client_portal_admin",
@@ -124,6 +138,9 @@ Deno.serve(async (request: Request) => {
 
     if (!requestedClientId && !isAdmin) {
       return response(request, 403, { ok: false, error: "A client account is required" });
+    }
+    if (catalogOnly && !isAdmin) {
+      return response(request, 403, { ok: false, error: "Portal administrator access required" });
     }
 
     let accountsQuery = destinationUser
@@ -149,6 +166,54 @@ Deno.serve(async (request: Request) => {
       return response(request, 403, { ok: false, error: "No permitted client account found" });
     }
 
+    // ShiftOps is strictly a read-only source. Only portal administrators may
+    // receive the complete outlet/venue catalog; client users remain limited
+    // to the outlets assigned to their own portal account.
+    const source = createClient(sourceUrl, sourceServiceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    let outletCatalog: SourceOutlet[] = [];
+    let portalUsers: SourcePortalUser[] = [];
+    if (isAdmin && !requestedClientId) {
+      const { data: outletRows, error: outletError } = await source
+        .from("outlets")
+        .select("name,country,location")
+        .order("name", { ascending: true });
+      if (outletError) {
+        throw new Error(`Daily Ops outlet read failed: ${outletError.message}`);
+      }
+      outletCatalog = ((outletRows || []) as SourceOutlet[])
+        .filter((outlet) => typeof outlet.name === "string" && outlet.name.trim())
+        .map((outlet) => ({
+          name: outlet.name.trim(),
+          country: outlet.country,
+          location: outlet.location,
+        }));
+
+      const { data: portalUserRows, error: portalUsersError } = await source
+        .from("portal_users")
+        .select("id,type,business_name")
+        .limit(2000);
+      if (portalUsersError) {
+        throw new Error(`Daily Ops venue read failed: ${portalUsersError.message}`);
+      }
+      portalUsers = ((portalUserRows || []) as SourcePortalUser[])
+        .filter((user) => typeof user.business_name === "string" && user.business_name.trim())
+        .map((user) => ({
+          id: user.id,
+          type: user.type,
+          business_name: user.business_name?.trim() || null,
+        }));
+    }
+
+    if (catalogOnly) {
+      return response(request, 200, {
+        ok: true,
+        outlet_catalog: outletCatalog,
+        portal_users: portalUsers,
+      });
+    }
+
     // Avoid hammering Daily Ops if a user reloads repeatedly.
     const cooldownCutoff = new Date(Date.now() - 30_000).toISOString();
     let recentRunQuery = destinationAdmin
@@ -163,7 +228,13 @@ Deno.serve(async (request: Request) => {
       : recentRunQuery.is("requested_client_id", null);
     const { data: recentRun } = await recentRunQuery.maybeSingle();
     if (recentRun) {
-      return response(request, 200, { ok: true, cached: true, synced_at: recentRun.completed_at });
+      return response(request, 200, {
+        ok: true,
+        cached: true,
+        synced_at: recentRun.completed_at,
+        outlet_catalog: outletCatalog,
+        portal_users: portalUsers,
+      });
     }
 
     await destinationAdmin.from("client_portal_sync_runs").insert({
@@ -191,14 +262,18 @@ Deno.serve(async (request: Request) => {
         status: "completed",
         completed_at: new Date().toISOString(),
       }).eq("id", runId);
-      return response(request, 200, { ok: true, source_rows: 0, mirrored_rows: 0, removed_rows: 0 });
+      return response(request, 200, {
+        ok: true,
+        source_rows: 0,
+        mirrored_rows: 0,
+        removed_rows: 0,
+        outlet_catalog: outletCatalog,
+        portal_users: portalUsers,
+      });
     }
 
     // This client is created only for SELECT calls. No source mutation method is
     // used anywhere in this function.
-    const source = createClient(sourceUrl, sourceServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
     const sourceColumns = [
       "id", "shift_date", "worker_name", "outlet", "role", "scheduled_start",
       "scheduled_end", "rate", "clock_in", "clock_out", "cancelled", "updated_at",
@@ -318,6 +393,8 @@ Deno.serve(async (request: Request) => {
       source_rows: sourceShifts.length,
       mirrored_rows: mirrorRows.length,
       removed_rows: removedRows,
+      outlet_catalog: outletCatalog,
+      portal_users: portalUsers,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected sync failure";
